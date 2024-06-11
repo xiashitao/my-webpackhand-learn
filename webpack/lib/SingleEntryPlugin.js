@@ -12,7 +12,7 @@ class SingleEntryPlugin {
         const { context, entry, name } = this;
         // 从此入口开始编译，编译入口文件和他的依赖
         console.log("SingleEntryPlugin make");
-        // compilation.addEntry(context, entry, name, callback);
+        compilation.addEntry(context, entry, name, callback);
       }
     );
   }

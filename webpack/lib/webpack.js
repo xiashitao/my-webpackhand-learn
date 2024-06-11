@@ -12,7 +12,9 @@ const webpack = (options, callback) => {
     }
   }
 
-  new WebpackOptionsApply().process(options, compiler)
+  // 初始化选项，挂载内置插件
+
+  new WebpackOptionsApply().process(options, compiler);
   return compiler;
 };
 

@@ -7,6 +7,8 @@ const {
 const NormalModuleFactory = require("./NormalModuleFactory");
 const Compilation = require("./Compilation");
 
+const Stats = require("./Stat.js");
+
 class Compiler {
   constructor(context) {
     // super();
@@ -35,16 +37,7 @@ class Compiler {
     };
     const onCompiled = (err, compilation) => {
       console.log("onCompiled");
-      finalCallback(null, {
-        toJson() {
-          return {
-            entries: true, // 显示所有入口
-            chunks: true, // 显示所有的代码块
-            modules: true, // 显示所有的模块
-            assets: true, // 显示所有打包后的资源，也就是文件
-          };
-        },
-      }); // @TODO
+      finalCallback(null, new Stats(compilation)); // @TODO
     };
     this.hooks.beforeRun.callAsync(this, (err) => {
       this.hooks.run.callAsync(this, (err) => {
