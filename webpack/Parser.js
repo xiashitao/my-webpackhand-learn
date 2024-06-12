@@ -7,6 +7,8 @@ class Parser {
       plugins: ["dynamicImport"], // 额外一个插件，支持 import('./title.js)
     });
   }
+
+  traverse() {}
 }
 
 module.exports = Parser;

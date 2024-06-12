@@ -5,7 +5,8 @@ const traverse = require("babel-traverse").default;
 const path = require("path");
 class NormalModule {
   constructor(data) {
-    const { name, context, rawRequest, resource, parser } = data;
+    const { name, context, rawRequest, resource, parser, moduleId } = data;
+    this.moduleId = moduleId;
     this.name = name;
     this.context = context;
     this.rawRequest = rawRequest;
@@ -14,6 +15,7 @@ class NormalModule {
     this.parser = parser;
     this._source;
     this._ast; //
+    // 当前模块依赖的信息
     this.dependencies = [];
   }
 
@@ -42,6 +44,8 @@ class NormalModule {
         CallExpression: (nodePath) => {
           let node = nodePath.node;
           if (node.callee.name === "require") {
+            // 把方法名从 require 改成 __webpack_require__
+            node.callee.name = "__webpack_require__";
             // 如果方法名是一个 require 方法
             let moduleName = node.arguments[0].value; // 模块的名称
             // 获得了一个可能的扩展名
@@ -57,18 +61,21 @@ class NormalModule {
 
             let depModuleId =
               "./" + path.posix.relative(this.context, depResource);
-            // console.log("depModuleId", depModuleId);
+            // 把 require 方法的参数改成模块的 ID，从 ./title.js 改成 ./src/title.js
+            node.arguments = [types.stringLiteral(depModuleId)];
             this.dependencies.push({
-              name: this.name,
-              context: this.context,
-              rawRequest: moduleName,
-              moduleId: depModuleId,
-              resource: depResource,
+              name: this.name, // main
+              context: this.context, // 根目录
+              rawRequest: moduleName, // 模块的相对路径 原始路径
+              moduleId: depModuleId, // 相对于根目录的相对路径 ，以./开头
+              resource: depResource, // 依赖模块的绝对路径
             });
           }
         },
       });
-      // callback();
+      let { code } = generate(this._ast);
+      this._source = code;
+      callback();
     });
   }
 
@@ -76,6 +83,7 @@ class NormalModule {
     // 1. 读取模块的源代码
     this.getSource(compilation, (err, source) => {
       // 把最原始的代码存放到当前模块的_source 属性上
+      // loader 的逻辑可以写在这里
       this._source = source;
       callback();
     });
