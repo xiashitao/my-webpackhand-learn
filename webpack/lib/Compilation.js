@@ -46,18 +46,19 @@ class Compilation {
 
   // 开始编译一个新的入口
   addEntry(context, entry, name, finnalCallback) {
-    this._addModuleChain(context, entry, name, (err, module) => {
+    this._addModuleChain(context, entry, name, false, (err, module) => {
       finnalCallback(err, module);
     });
   }
 
-  _addModuleChain(context, rawRequest, name, callback) {
+  _addModuleChain(context, rawRequest, name, async, callback) {
     this.createModule(
       {
         name,
         context,
         rawRequest,
         parser,
+        async,
         resource: path.posix.join(context, rawRequest),
       },
       (entryModule) => this.entries.push(entryModule),

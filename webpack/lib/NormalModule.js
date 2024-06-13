@@ -3,9 +3,12 @@ const generate = require("babel-generator").default;
 const traverse = require("babel-traverse").default;
 
 const path = require("path");
+
+const async = require("neo-async");
 class NormalModule {
   constructor(data) {
-    const { name, context, rawRequest, resource, parser, moduleId } = data;
+    const { name, context, rawRequest, resource, parser, moduleId, async } =
+      data;
     this.moduleId = moduleId;
     this.name = name;
     this.context = context;
@@ -17,6 +20,10 @@ class NormalModule {
     this._ast; //
     // 当前模块依赖的信息
     this.dependencies = [];
+    // 当前模块依赖哪些异步模块 import（哪些模块）
+    this.blocks = [];
+    // 表示当前的模块是属于一个异步代码块，还是一个同步代码块
+    this.async = async;
   }
 
   build(compilation, callback) {
@@ -44,23 +51,30 @@ class NormalModule {
         CallExpression: (nodePath) => {
           let node = nodePath.node;
           if (node.callee.name === "require") {
+            // 判断是第三方模块还是自定义模块
             // 把方法名从 require 改成 __webpack_require__
             node.callee.name = "__webpack_require__";
+            let depResource;
             // 如果方法名是一个 require 方法
             let moduleName = node.arguments[0].value; // 模块的名称
-            // 获得了一个可能的扩展名
-            let extName =
-              moduleName.split(path.posix.sep).pop().indexOf(".") === -1
-                ? ".js"
-                : "";
-            // 获取依赖模块（./src/title.js）的绝对路径
-            let depResource = path.posix.join(
-              path.posix.dirname(this.resource),
-              moduleName + extName
-            );
-
-            let depModuleId =
-              "./" + path.posix.relative(this.context, depResource);
+            if (moduleName.startsWith(".")) {
+              // 获得了一个可能的扩展名
+              let extName =
+                moduleName.split(path.posix.sep).pop().indexOf(".") === -1
+                  ? ".js"
+                  : "";
+              // 获取依赖模块（./src/title.js）的绝对路径
+              depResource = path.posix.join(
+                path.posix.dirname(this.resource),
+                moduleName + extName
+              );
+            } else {
+              depResource = require.resolve(
+                path.posix.join(this.context, "node_modules", moduleName)
+              );
+              depResource = depResource.replace(/\\/g, "/");
+            }
+            let depModuleId = "." + depResource.slice(this.context.length);
             // 把 require 方法的参数改成模块的 ID，从 ./title.js 改成 ./src/title.js
             node.arguments = [types.stringLiteral(depModuleId)];
             this.dependencies.push({
@@ -69,6 +83,27 @@ class NormalModule {
               rawRequest: moduleName, // 模块的相对路径 原始路径
               moduleId: depModuleId, // 相对于根目录的相对路径 ，以./开头
               resource: depResource, // 依赖模块的绝对路径
+            });
+          } else if (types.isImportDeclaration(node)) {
+            // 这里的判断要注意
+            let moduleName = node.arguments[0].value; // 模块的名称
+            let extName =
+              moduleName.split(path.posix.sep).pop().indexOf(".") === -1
+                ? ".js"
+                : "";
+            // 获取依赖的绝对路径
+            let depResource = path.posix.join(
+              path.posix.dirname(this.resource),
+              moduleName + extName
+            );
+            let depModuleId =
+              "./" + path.posix.relative(this.context, depResource);
+            // 如果遇到了import， 那么import的模快会成为一个单独的入口，会生成一个单独的代码块
+            this.blocks.push({
+              context: this.context,
+              entry: depModuleId,
+              name: "src_title_js.main.js",
+              async: true,
             });
           }
         },
@@ -85,7 +120,14 @@ class NormalModule {
       // 把最原始的代码存放到当前模块的_source 属性上
       // loader 的逻辑可以写在这里
       this._source = source;
-      callback();
+      async.forEach(
+        this.blocks,
+        (block, done) => {
+          const { context, entry, name, async } = block;
+          compilation._addModuleChain(context, entry, name, async, done);
+        },
+        callback
+      );
     });
   }
 
@@ -94,3 +136,10 @@ class NormalModule {
   }
 }
 module.exports = NormalModule;
+
+/* 
+  如何处理懒加载
+  1. 先把代码转成AST语法树
+  2. 
+
+*/

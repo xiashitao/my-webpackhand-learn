@@ -1,2 +1,3 @@
-let title = require("./title.js");
-console.log(title);
+import("./title").then((res) => {
+  console.log(res.default);
+});
